@@ -1,5 +1,7 @@
 # HotelBot: Interroger une base hôtelière en langage naturel
 
+https://github.com/user-attachments/assets/ecc1e6a9-cea7-4414-af01-be19f231442f
+
 Prototype académique de **text-to-SQL avec un LLM** : l'utilisateur pose une question en français (« Je cherche une chambre pour moins de 100 € par nuit à Marseille »), l'API Claude (Anthropic) la traduit en requête SQL, la requête est **validée** puis exécutée **en lecture seule**, et les résultats sont reformulés en langage naturel dans une interface **Streamlit**.
 
 **🔗 Démo en ligne : https://hotelbot-kandji.streamlit.app **
