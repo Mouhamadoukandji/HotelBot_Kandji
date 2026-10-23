@@ -1,0 +1,8 @@
+# Démo en ligne (SQLite) – Streamlit Community Cloud
+streamlit>=1.50
+anthropic>=0.71
+pandas>=2.0
+python-dotenv>=1.0
+
+# Tests
+pytest>=8.0

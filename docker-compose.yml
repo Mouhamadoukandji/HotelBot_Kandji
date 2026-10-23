@@ -1,0 +1,36 @@
+services:
+  oracle-db:
+    image: gvenzl/oracle-xe:21-slim
+    container_name: hotel-oracle-db
+    ports:
+      - "1521:1521"
+    environment:
+      - ORACLE_PASSWORD=${ORACLE_PASSWORD}
+    volumes:
+      - oracle-data:/opt/oracle/oradata
+    healthcheck:
+      test: ["CMD-SHELL", "healthcheck.sh"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  streamlit-app:
+    build: .
+    container_name: hotel-streamlit
+    ports:
+      - "8501:8501"
+    depends_on:
+      oracle-db:
+        condition: service_healthy
+    # Les variables sont lues dans .env au démarrage, jamais copiées dans l'image.
+    env_file: .env
+    environment:
+      - DB_BACKEND=oracle
+    restart: unless-stopped
+
+volumes:
+  oracle-data:
+
+networks:
+  default:
+    name: hotel-network
