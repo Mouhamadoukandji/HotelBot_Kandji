@@ -4,12 +4,15 @@ https://github.com/user-attachments/assets/ecc1e6a9-cea7-4414-af01-be19f231442f
 
 Prototype académique de **text-to-SQL avec un LLM** : l'utilisateur pose une question en français (« Je cherche une chambre pour moins de 100 € par nuit à Marseille »), l'API Claude (Anthropic) la traduit en requête SQL, la requête est **validée** puis exécutée **en lecture seule**, et les résultats sont reformulés en langage naturel dans une interface **Streamlit**.
 
-**🔗 Démo en ligne : https://hotelbot-kandji.streamlit.app **
+**🔗 Démo en ligne : [hotelbot-kandji.streamlit.app](https://hotelbot-kandji.streamlit.app)**
 _La démo utilise une base SQLite en lecture seule. La version complète tourne sur Oracle 21c avec Docker Compose (voir [Installation](#installation))._
 
-**Statut :** prototype de démonstration. Les protections de sécurité sont testées automatiquement ; la qualité des requêtes générées n'a pas encore été évaluée sur un jeu de questions. Voir [Limites](#limites).
+**Statut :** prototype de démonstration, projet réalisé seul. Les protections de sécurité sont couvertes par 45 tests automatiques, et la qualité du SQL généré est mesurée sur un jeu de 36 questions annotées (voir [Évaluation](#évaluation)).
 
-_Projet réalisé seul
+| | |
+| --- | --- |
+| **Ce que montre le projet** | Text-to-SQL avec un LLM, *prompt engineering*, défense en profondeur face au SQL généré, évaluation par exactitude à l'exécution, tests, Docker, déploiement |
+| **Stack** | Python, API Claude (Anthropic), Streamlit, SQLite / Oracle 21c, Docker Compose, pytest |
 
 ---
 
@@ -66,20 +69,54 @@ Le SQL produit par le LLM n'est **jamais considéré comme fiable**. Le projet a
 ### Tentatives testées
 
 | Tentative | Résultat |
-| --- |  |
+| --- | --- |
 | Requête de lecture normale | Exécutée |
-| `SELECT * FROM HOTELS; DROP TABLE CLIENTS` (deux instructions) | Ignore le DROP |
-| `SELECT * FROM HOTELS -- DROP …` (commentaire) | Ignore le DROP |
+| `SELECT * FROM HOTELS; DROP TABLE CLIENTS` (deux instructions) | Refusée |
+| `SELECT * FROM HOTELS -- DROP …` (commentaire) | Refusée |
 | `DELETE`, `UPDATE`, `INSERT`, `DROP`, `CREATE`, `SELECT … INTO` | Bloquées par la validation **et** refusées par la base |
 | `PRAGMA`, `ATTACH`, `load_extension`, paquets Oracle `DBMS_*` / `UTL_*` | Bloqués par la validation |
 | Nom contenant un mot interdit (`'Drop Inn'`) | Exécutée (pas de faux positif) |
 | « Hôtels avec piscine » (hors schéma) | Le modèle doit répondre `NON_SUPPORTE` → refus |
 
-Ces cas sont vérifiés par **40 tests automatiques** (`tests/`), dont des tests qui contournent la validation pour vérifier que **la base elle-même** refuse toute écriture :
+Ces cas sont vérifiés par **40 tests de sécurité et de base de données** (`tests/`), dont des tests qui contournent la validation pour vérifier que **la base elle-même** refuse toute écriture :
 
 ```bash
 python -m pytest
 ```
+
+## Évaluation
+
+La sécurité ne suffit pas : il faut aussi savoir **si le SQL généré répond à la bonne question**. Le jeu `evaluation/questions.json` contient **36 questions** annotées :
+
+| Catégorie | Nombre | Exemple |
+| --- | --- | --- |
+| Simple (une table) | 10 | « Liste tous les hôtels 5 étoiles. » |
+| Jointure | 8 | « Quels hôtels proposent une Suite Présidentielle ? » |
+| Agrégation | 8 | « Combien de chambres compte chaque hôtel ? » |
+| Complexe (sous-requêtes, conditions croisées) | 4 | « Quels types de chambre sont plus chers que la moyenne ? » |
+| Hors périmètre (doit être refusée) | 6 | « Quels hôtels ont une piscine ? », « Supprime la réservation de Pierre Dubois. » |
+
+Pour chaque question, `scripts/evaluer.py` fait générer le SQL par Claude, le fait passer par la validation de sécurité, l'exécute en lecture seule et **compare son résultat à celui d'une requête de référence** :
+
+- **exactitude à l'exécution stricte** : mêmes lignes et mêmes colonnes, ordre ignoré ;
+- **exactitude à l'exécution souple** : chaque colonne attendue est présente, le modèle peut ajouter des colonnes utiles ;
+- **refus corrects** : part des questions hors périmètre refusées (`NON_SUPPORTE` ou requête bloquée).
+
+```bash
+python scripts/evaluer.py --limite 5   # premier essai
+python scripts/evaluer.py              # jeu complet, détail dans evaluation/resultats.csv
+```
+
+### Résultats
+
+<!-- À REMPLIR avec les chiffres affichés par scripts/evaluer.py -->
+| Modèle SQL | Exactitude stricte | Exactitude souple | Refus corrects |
+| --- | --- | --- | --- |
+| `claude-sonnet-4-5` | … % | … % | … / 6 |
+
+Analyse des erreurs : _à compléter (catégories les plus fragiles, exemples d'erreurs, pistes de correction)._
+
+Le script et le jeu de questions sont eux-mêmes testés sans appel à l'API (`tests/test_evaluation.py`) : chaque requête de référence renvoie au moins une ligne, et un « modèle parfait » simulé obtient 100 %.
 
 ## Fonctionnalités
 
@@ -128,9 +165,11 @@ hotelbot/
 │   └── CreateTables.py         # création des tables Oracle
 ├── scripts/
 │   ├── creer_base_sqlite.py    # génère data/hotels.db
-│   └── init_oracle.py          # tables, données et utilisateur lecture seule sous Oracle
+│   ├── init_oracle.py          # tables, données et utilisateur lecture seule sous Oracle
+│   └── evaluer.py              # évaluation du text-to-SQL (exactitude à l'exécution)
+├── evaluation/questions.json   # 36 questions annotées avec leur requête de référence
 ├── data/hotels.db              # base de la démo
-├── tests/                      # tests de sécurité et de la base
+├── tests/                      # tests de sécurité, de la base et de l'évaluation
 ├── Dockerfile, docker-compose.yml
 ├── requirements.txt            # démo (SQLite)
 └── requirements-oracle.txt     # version Oracle
@@ -140,8 +179,8 @@ hotelbot/
 
 ### Option 1 : en local avec SQLite (le plus simple)
 ```bash
-git clone https://github.com/Mouhamadoukandji/hotelbot.git
-cd hotelbot
+git clone https://github.com/Mouhamadoukandji/HotelBot_Kandji.git
+cd HotelBot_Kandji
 python -m venv .venv
 source .venv/bin/activate            # Windows : .venv\Scripts\activate
 pip install -r requirements.txt
@@ -171,7 +210,7 @@ Le fichier `.env` contient des secrets : il est exclu de Git (`.gitignore`) et d
 ## Limites
 
 1. **Validation imparfaite.** Le filtre par mots-clés peut, en théorie, être contourné ou refuser une requête légitime. Il ne sert que de deuxième barrière : la protection principale est la connexion en lecture seule.
-2. **Pas d'évaluation de la qualité.** La part de questions pour lesquelles le SQL généré est correct n'a pas été mesurée ; le fonctionnement a été vérifié manuellement sur quelques exemples.
+2. **Évaluation limitée.** Le jeu de 36 questions est petit et rédigé par l'auteur : il mesure une tendance, pas une performance garantie sur de vraies questions d'utilisateurs.
 3. **Risque d'hallucination à la rédaction.** Le modèle reçoit la consigne de n'utiliser que les résultats, mais rien ne le garantit. Les résultats bruts sont affichés pour permettre la vérification.
 4. **Questions hors schéma.** La base ne contient ni équipements ni descriptions : ces questions doivent être refusées, mais le refus dépend du modèle.
 5. **Pas de mémoire de conversation.** Chaque question est traduite indépendamment : « Et à Lyon ? » n'est pas compris.
@@ -183,10 +222,12 @@ Le fichier `.env` contient des secrets : il est exclu de Git (`.gitignore`) et d
 - [x] Connexion en lecture seule et validation des requêtes
 - [x] Tests automatiques des protections
 - [x] Réduction de 3 à 2 appels au LLM, et réponse fondée sur la question et les résultats
-- [ ] Jeu d'évaluation (questions et résultats attendus) et mesure de l'**exactitude à l'exécution**
+- [x] Jeu d'évaluation (questions et résultats attendus) et mesure de l'**exactitude à l'exécution**
+- [ ] Élargir le jeu d'évaluation avec des questions reformulées et ambiguës
 - [ ] Validation par analyse syntaxique du SQL (par exemple avec `sqlglot`) plutôt que par mots-clés
 - [ ] Mémoire de conversation pour les questions de suivi
 - [ ] Création de réservations avec confirmation de l'utilisateur et transaction contrôlée
 
 ## Auteur
-**Mouhamadou Falilou KANDJI**, Master Science et Ingénierie des Données, Aix-Marseille Université.
+**Mouhamadou Falilou KANDJI**, Master 2 Science et Ingénierie des Données, Aix-Marseille Université.
+[Portfolio](https://mouhamadoukandji.github.io) · [LinkedIn](https://www.linkedin.com/in/mouhamadou-falilou-kandji)
