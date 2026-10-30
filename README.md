@@ -112,7 +112,7 @@ python scripts/evaluer.py              # jeu complet, détail dans evaluation/re
 <!-- À REMPLIR avec les chiffres affichés par scripts/evaluer.py -->
 | Modèle SQL | Exactitude stricte | Exactitude souple | Refus corrects |
 | --- | --- | --- | --- |
-| `claude-sonnet-4-5` | … % | … % | … / 6 |
+| `claude-sonnet-4-5` | 50 % (15/30) |93 % (28/30) | 100 % (6/6) |
 
 Analyse des erreurs : _à compléter (catégories les plus fragiles, exemples d'erreurs, pistes de correction)._
 
