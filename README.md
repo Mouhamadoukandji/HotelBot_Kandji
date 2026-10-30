@@ -114,7 +114,6 @@ python scripts/evaluer.py              # jeu complet, détail dans evaluation/re
 | --- | --- | --- | --- |
 | `claude-sonnet-4-5` | 50 % (15/30) |93 % (28/30) | 100 % (6/6) |
 
-Analyse des erreurs : _à compléter (catégories les plus fragiles, exemples d'erreurs, pistes de correction)._
 
 Le script et le jeu de questions sont eux-mêmes testés sans appel à l'API (`tests/test_evaluation.py`) : chaque requête de référence renvoie au moins une ligne, et un « modèle parfait » simulé obtient 100 %.
 
